@@ -210,8 +210,24 @@ def text(m):
                 if not files:
                     bot.send_message(m.chat.id,"📭 لا توجد ملفات")
                 for fid,fname in files:
-                    bot.send_document(m.chat.id,fid,caption=fname)
-@bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and m.from_user.id == ADMIN_ID)
+                    bot.send_document(m.chat.id,fid,caption=fname)@bot.message_handler(func=lambda m: m.text == "👥 المستخدمين" and m.from_user.id == ADMIN_ID)
+def users_list(m):
+    c = db.conn()
+    cur = c.cursor()
+    cur.execute("SELECT user_id, username, first_name FROM users ORDER BY user_id DESC LIMIT 30")
+    users = cur.fetchall()
+    cur.close()
+    db.close(c)
+
+    if not users:
+        bot.send_message(m.chat.id, "❌ لا يوجد مستخدمون")
+        return
+
+    text = "👥 آخر المستخدمين:\n\n"
+    for uid, user, name in users:
+        text += f"• {name or '—'} (@{user or '—'})\n"
+
+    bot.send_message(m.chat.id, text)@bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and m.from_user.id == ADMIN_ID)
 def stats(m):
     c = db.conn()
     cur = c.cursor()
@@ -234,24 +250,6 @@ def stats(m):
         f"📁 الملفات: {f}\n"
         f"🔗 القنوات: {ch}"
     )
-    @bot.message_handler(func=lambda m: m.text == "👥 المستخدمين" and m.from_user.id == ADMIN_ID)
-def users_list(m):
-    c = db.conn()
-    cur = c.cursor()
-    cur.execute("SELECT user_id, username, first_name FROM users ORDER BY user_id DESC LIMIT 30")
-    users = cur.fetchall()
-    cur.close()
-    db.close(c)
-
-    if not users:
-        bot.send_message(m.chat.id, "❌ لا يوجد مستخدمون")
-        return
-
-    text = "👥 آخر المستخدمين:\n\n"
-    for uid, user, name in users:
-        text += f"• {name or '—'} (@{user or '—'})\n"
-
-    bot.send_message(m.chat.id, text)
 # === Documents ===
 @bot.message_handler(content_types=['document'])
 def docs(m):
