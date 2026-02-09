@@ -17,7 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# === الإعدادات ===
+# === الإعدادات من Environment Variables ===
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -26,7 +26,7 @@ RENDER_EXTERNAL_URL = os.getenv('RENDER_EXTERNAL_URL')
 # === خادم الويب (Keep Alive) ===
 app = Flask('')
 @app.route('/')
-def home(): return "Bot is Alive!"
+def home(): return "Bot is running!"
 
 def run_server():
     port = int(os.environ.get('PORT', 8080))
@@ -43,9 +43,14 @@ def self_ping():
 class Database:
     def __init__(self):
         url = DATABASE_URL
-        if url.startswith("postgres://"): url = url.replace("postgres://", "postgresql://", 1)
-        self.pool = psycopg2.pool.SimpleConnectionPool(1, 20, url)
-        self.init_db()
+        if url and url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        try:
+            self.pool = psycopg2.pool.SimpleConnectionPool(1, 10, url)
+            self.init_db()
+        except Exception as e:
+            logger.error(f"❌ Database connection error: {e}")
+            exit(1)
 
     def get_conn(self): return self.pool.getconn()
     def put_conn(self, conn): self.pool.putconn(conn)
@@ -60,53 +65,19 @@ class Database:
             conn.commit()
         self.put_conn(conn)
 
-    # دوال الجلب (Selects)
-    def get_users(self):
-        conn = self.get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT user_id, username, first_name FROM users ORDER BY joined_at DESC")
-            res = cur.fetchall()
-        self.put_conn(conn)
-        return res
-
+    # دوال الإدارة
     def get_stats(self):
         conn = self.get_conn()
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM users")
-            u_count = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM subjects")
-            s_count = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM files")
-            f_count = cur.fetchone()[0]
+            cur.execute("SELECT (SELECT COUNT(*) FROM users), (SELECT COUNT(*) FROM subjects), (SELECT COUNT(*) FROM files)")
+            res = cur.fetchone()
         self.put_conn(conn)
-        return u_count, s_count, f_count
+        return res
 
-    # بقية الدوال (إضافة وحذف) ...
     def add_user(self, uid, user, name):
         conn = self.get_conn()
         with conn.cursor() as cur:
             cur.execute("INSERT INTO users (user_id, username, first_name) VALUES (%s, %s, %s) ON CONFLICT (user_id) DO NOTHING", (uid, user, name))
-            conn.commit()
-        self.put_conn(conn)
-
-    def add_subject(self, name):
-        conn = self.get_conn()
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO subjects (name) VALUES (%s) ON CONFLICT DO NOTHING", (name,))
-            conn.commit()
-        self.put_conn(conn)
-
-    def delete_subject(self, sid):
-        conn = self.get_conn()
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM subjects WHERE id = %s", (sid,))
-            conn.commit()
-        self.put_conn(conn)
-
-    def delete_channel(self, cid):
-        conn = self.get_conn()
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM channels WHERE channel_id = %s", (cid,))
             conn.commit()
         self.put_conn(conn)
 
@@ -130,78 +101,62 @@ db = Database()
 bot = telebot.TeleBot(API_TOKEN)
 user_states = {}
 
+# === التحقق من الاشتراك ===
+def check_sub(uid):
+    if uid == ADMIN_ID: return True, []
+    channels = db.get_all_channels()
+    unsubbed = []
+    for cid, link, name in channels:
+        try:
+            status = bot.get_chat_member(cid, uid).status
+            if status not in ['member', 'administrator', 'creator']: unsubbed.append((name or cid, link))
+        except: unsubbed.append((name or cid, link))
+    return len(unsubbed) == 0, unsubbed
+
 # === الكيبوردات ===
-def get_admin_keyboard():
+def get_main_kb(uid):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    kb.row("➕ إضافة مادة", "🗑️ حذف مادة")
-    kb.row("📁 رفع ملف", "🔗 إضافة قناة")
-    kb.row("👥 المستخدمين", "📊 إحصائيات")
-    kb.row("🏠 الرئيسية", "🚫 حذف قناة")
-    return kb
-
-def get_user_keyboard():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    for _, name in db.get_all_subjects(): kb.add(types.KeyboardButton(name))
-    kb.add("🔄 تحديث", "ℹ️ مساعدة")
-    return kb
-
-# === معالجات الأزرار الإدارية (الإصلاح هنا) ===
-
-@bot.message_handler(func=lambda m: m.text == "🏠 الرئيسية")
-def main_menu(m):
-    user_states.pop(m.from_user.id, None)
-    if m.from_user.id == ADMIN_ID:
-        bot.send_message(m.chat.id, "🏠 عدنا للوحة التحكم", reply_markup=get_admin_keyboard())
+    if uid == ADMIN_ID:
+        kb.row("➕ إضافة مادة", "🗑️ حذف مادة")
+        kb.row("📁 رفع ملف", "🔗 إضافة قناة")
+        kb.row("👥 المستخدمين", "📊 إحصائيات")
+        kb.row("🏠 الرئيسية", "🚫 حذف قناة")
     else:
-        bot.send_message(m.chat.id, "🏠 القائمة الرئيسية", reply_markup=get_user_keyboard())
+        for _, name in db.get_all_subjects(): kb.add(types.KeyboardButton(name))
+        kb.add("🔄 تحديث", "ℹ️ مساعدة")
+    return kb
+
+# === المعالجات ===
+@bot.message_handler(commands=['start'])
+def start(m):
+    db.add_user(m.from_user.id, m.from_user.username, m.from_user.first_name)
+    ok, unsubbed = check_sub(m.from_user.id)
+    if not ok:
+        ikb = types.InlineKeyboardMarkup()
+        for name, link in unsubbed: ikb.add(types.InlineKeyboardButton(f"🔗 اشترك في {name}", url=link))
+        ikb.add(types.InlineKeyboardButton("✅ تأكيد الاشتراك", callback_data="recheck"))
+        bot.send_message(m.chat.id, "⚠️ يجب الاشتراك لاستخدام البوت:", reply_markup=ikb)
+    else:
+        bot.send_message(m.chat.id, "📚 أهلاً بك! اختر من القائمة:", reply_markup=get_main_kb(m.from_user.id))
 
 @bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and m.from_user.id == ADMIN_ID)
 def stats(m):
     u, s, f = db.get_stats()
-    bot.send_message(m.chat.id, f"📊 *إحصائيات البوت:*\n\n👥 عدد المستخدمين: {u}\n📚 عدد المواد: {s}\n📁 عدد الملفات: {f}", parse_mode="Markdown")
+    bot.send_message(m.chat.id, f"📊 الإحصائيات:\n- المستخدمين: {u}\n- المواد: {s}\n- الملفات: {f}")
 
-@bot.message_handler(func=lambda m: m.text == "👥 المستخدمين" and m.from_user.id == ADMIN_ID)
-def list_users(m):
-    users = db.get_users()[:20] # عرض آخر 20 مستخدم فقط لتفادي طول الرسالة
-    text = "👥 *آخر المستخدمين المنضمين:*\n\n"
-    for uid, user, name in users:
-        text += f"- {name} (@{user}) [`{uid}`]\n"
-    bot.send_message(m.chat.id, text, parse_mode="Markdown")
+@bot.message_handler(func=lambda m: m.text == "🏠 الرئيسية")
+def home_btn(m):
+    user_states.pop(m.from_user.id, None)
+    bot.send_message(m.chat.id, "العودة للقائمة الرئيسية", reply_markup=get_main_kb(m.from_user.id))
 
-@bot.message_handler(func=lambda m: m.text == "🗑️ حذف مادة" and m.from_user.id == ADMIN_ID)
-def del_sub_menu(m):
-    subjects = db.get_all_subjects()
-    kb = types.InlineKeyboardMarkup()
-    for sid, name in subjects:
-        kb.add(types.InlineKeyboardButton(f"❌ {name}", callback_data=f"ds_{sid}"))
-    bot.send_message(m.chat.id, "🗑️ اختر المادة المراد حذفها نهائياً:", reply_markup=kb)
-
-@bot.message_handler(func=lambda m: m.text == "🚫 حذف قناة" and m.from_user.id == ADMIN_ID)
-def del_chan_menu(m):
-    channels = db.get_all_channels()
-    kb = types.InlineKeyboardMarkup()
-    for cid, link, name in channels:
-        kb.add(types.InlineKeyboardButton(f"🚫 {name or cid}", callback_data=f"dc_{cid}"))
-    bot.send_message(m.chat.id, "🚫 اختر القناة المراد حذفها:", reply_markup=kb)
-
-# === معالجة الـ Callback للحذف ===
-@bot.callback_query_handler(func=lambda call: call.data.startswith(("ds_", "dc_")))
-def delete_callback(call):
-    if call.data.startswith("ds_"):
-        sid = int(call.data.split("_")[1])
-        db.delete_subject(sid)
-        bot.answer_callback_query(call.id, "✅ تم حذف المادة")
-        bot.edit_message_text("✅ تم حذف المادة ومحتوياتها بنجاح.", call.message.chat.id, call.message.message_id)
-    elif call.data.startswith("dc_"):
-        cid = call.data.split("_")[1]
-        db.delete_channel(cid)
-        bot.answer_callback_query(call.id, "✅ تم حذف القناة")
-        bot.edit_message_text("✅ تم إزالة القناة من قائمة الاشتراك الإجباري.", call.message.chat.id, call.message.message_id)
-
-# (بقية المعالجات السابقة: إضافة مادة، رفع ملف، التحقق من الاشتراك تبقى كما هي في الكود السابق)
-# ... أضف هنا الـ handlers الخاصة بالبداية والتحقق والرفع التي أرسلتها لك في الرد السابق ...
-
+# تنظيف التعارض وبدء التشغيل
 if __name__ == '__main__':
     Thread(target=run_server, daemon=True).start()
     Thread(target=self_ping, daemon=True).start()
-    bot.infinity_polling()
+    
+    logger.info("🚀 Cleaning old connections...")
+    bot.remove_webhook()  # حل مشكلة التعارض
+    time.sleep(1)
+    
+    logger.info("✅ Bot is starting...")
+    bot.infinity_polling(skip_pending=True)
