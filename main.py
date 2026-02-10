@@ -100,7 +100,7 @@ class Database:
         c.commit(); cur.close(); self.close(c)
 
     # === Channels ===
-    def get_all_channels(self):
+    def get_all_channels(self(self):
         c = self.conn(); cur = c.cursor()
         cur.execute("SELECT channel_id,channel_link,channel_name FROM channels")
         r = cur.fetchall(); cur.close(); self.close(c); return r
@@ -155,7 +155,7 @@ def start(m):
         kb.add(types.InlineKeyboardButton("📢 اشترك في القناة",url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"))
         bot.send_message(
             m.chat.id,
-            "⚠️ لاستخدام البوت عليك الاشتراك في القناة أولاً.
+            "⚠️ لاستخدام البوت عليك الاشتراك في القناة الجديدة.
 "
             "اضغط على الزر أدناه ثم أعد /start",
             reply_markup=kb
@@ -220,7 +220,7 @@ def text(m):
         kb.add(types.InlineKeyboardButton("📢 اشترك في القناة",url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"))
         bot.send_message(
             m.chat.id,
-            "⚠️ لاستخدام البوت عليك الاشتراك في القناة أولاً.
+            "⚠️ لاستخدام البوت عليك الاشتراك في القناة الجديدة.
 "
             "اضغط على الزر أدناه ثم أعد /start",
             reply_markup=kb
@@ -312,7 +312,7 @@ def docs(m):
         kb.add(types.InlineKeyboardButton("📢 اشترك في القناة",url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"))
         bot.send_message(
             m.chat.id,
-            "⚠️ لرفع الملفات عليك الاشتراك في القناة أولاً.",
+            "⚠️ لرفع الملفات عليك الاشتراك في القناة الجديدة.",
             reply_markup=kb
         )
         return
