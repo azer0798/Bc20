@@ -210,7 +210,8 @@ def text(m):
                 if not files:
                     bot.send_message(m.chat.id,"📭 لا توجد ملفات")
                 for fid,fname in files:
-                    bot.send_document(m.chat.id,fid,caption=fname)@bot.message_handler(func=lambda m: m.text == "👥 المستخدمين" and m.from_user.id == ADMIN_ID)
+                    bot.send_document(m.chat.id,fid,caption=fname)
+@bot.message_handler(func=lambda m: m.text == "👥 المستخدمين" and m.from_user.id == ADMIN_ID)
 def users_list(m):
     c = db.conn()
     cur = c.cursor()
@@ -227,7 +228,8 @@ def users_list(m):
     for uid, user, name in users:
         text += f"• {name or '—'} (@{user or '—'})\n"
 
-    bot.send_message(m.chat.id, text)@bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and m.from_user.id == ADMIN_ID)
+    bot.send_message(m.chat.id, text)
+@bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and m.from_user.id == ADMIN_ID)
 def stats(m):
     c = db.conn()
     cur = c.cursor()
