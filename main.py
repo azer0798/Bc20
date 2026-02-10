@@ -22,6 +22,7 @@ API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 DATABASE_URL = os.getenv('DATABASE_URL')
 RENDER_EXTERNAL_URL = os.getenv('RENDER_EXTERNAL_URL')
+REQUIRED_CHANNEL = os.getenv('REQUIRED_CHANNEL')
 
 # === Flask Ping ===
 app = Flask('')
@@ -62,65 +63,76 @@ class Database:
 
     # === Subjects ===
     def get_all_subjects(self):
-        c=self.conn();cur=c.cursor()
+        c = self.conn(); cur = c.cursor()
         cur.execute("SELECT id,name FROM subjects ORDER BY name")
-        r=cur.fetchall();cur.close();self.close(c);return r
+        r = cur.fetchall(); cur.close(); self.close(c); return r
 
-    def add_subject(self,name):
-        c=self.conn();cur=c.cursor()
+    def add_subject(self, name):
+        c = self.conn(); cur = c.cursor()
         try:
             cur.execute("INSERT INTO subjects(name) VALUES(%s)",(name,))
-            c.commit();return True
+            c.commit(); return True
         except:
             return False
         finally:
-            cur.close();self.close(c)
+            cur.close(); self.close(c)
 
-    def delete_subject(self,sid):
-        c=self.conn();cur=c.cursor()
+    def delete_subject(self, sid):
+        c = self.conn(); cur = c.cursor()
         cur.execute("DELETE FROM subjects WHERE id=%s",(sid,))
-        c.commit();cur.close();self.close(c)
+        c.commit(); cur.close(); self.close(c)
 
     # === Files ===
-    def add_file(self,sid,fid,fname):
-        c=self.conn();cur=c.cursor()
+    def add_file(self, sid, fid, fname):
+        c = self.conn(); cur = c.cursor()
         cur.execute("INSERT INTO files(subject_id,file_id,file_name) VALUES(%s,%s,%s)",(sid,fid,fname))
-        c.commit();cur.close();self.close(c)
+        c.commit(); cur.close(); self.close(c)
 
-    def get_files(self,sid):
-        c=self.conn();cur=c.cursor()
+    def get_files(self, sid):
+        c = self.conn(); cur = c.cursor()
         cur.execute("SELECT file_id,file_name FROM files WHERE subject_id=%s",(sid,))
-        r=cur.fetchall();cur.close();self.close(c);return r
+        r = cur.fetchall(); cur.close(); self.close(c); return r
 
     # === Users ===
-    def add_user(self,uid,u,n):
-        c=self.conn();cur=c.cursor()
+    def add_user(self, uid, u, n):
+        c = self.conn(); cur = c.cursor()
         cur.execute("INSERT INTO users VALUES(%s,%s,%s) ON CONFLICT DO NOTHING",(uid,u,n))
-        c.commit();cur.close();self.close(c)
+        c.commit(); cur.close(); self.close(c)
 
     # === Channels ===
     def get_all_channels(self):
-        c=self.conn();cur=c.cursor()
+        c = self.conn(); cur = c.cursor()
         cur.execute("SELECT channel_id,channel_link,channel_name FROM channels")
-        r=cur.fetchall();cur.close();self.close(c);return r
+        r = cur.fetchall(); cur.close(); self.close(c); return r
 
-    def add_channel(self,cid,link,name):
-        c=self.conn();cur=c.cursor()
+    def add_channel(self, cid, link, name):
+        c = self.conn(); cur = c.cursor()
         cur.execute(
             "INSERT INTO channels(channel_id,channel_link,channel_name) VALUES(%s,%s,%s) "
             "ON CONFLICT(channel_id) DO UPDATE SET channel_link=EXCLUDED.channel_link",
-            (cid,link,name)
+            (cid, link, name)
         )
-        c.commit();cur.close();self.close(c)
+        c.commit(); cur.close(); self.close(c)
 
-    def delete_channel(self,cid):
-        c=self.conn();cur=c.cursor()
+    def delete_channel(self, cid):
+        c = self.conn(); cur = c.cursor()
         cur.execute("DELETE FROM channels WHERE channel_id=%s",(cid,))
-        c.commit();cur.close();self.close(c)
+        c.commit(); cur.close(); self.close(c)
 
 db = Database()
 bot = telebot.TeleBot(API_TOKEN)
 states = {}
+
+# === التحقق من الاشتراك ===
+def is_subscribed(user_id):
+    if not REQUIRED_CHANNEL:
+        return True
+    try:
+        member = bot.get_chat_member(REQUIRED_CHANNEL, user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        logger.warning(f"Subscription check failed: {e}")
+        return False
 
 # === Keyboard ===
 def main_kb(uid):
@@ -138,6 +150,18 @@ def main_kb(uid):
 # === Start ===
 @bot.message_handler(commands=['start'])
 def start(m):
+    if not is_subscribed(m.from_user.id):
+        kb = types.InlineKeyboardMarkup()
+        kb.add(types.InlineKeyboardButton("📢 اشترك في القناة",url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"))
+        bot.send_message(
+            m.chat.id,
+            "⚠️ لاستخدام البوت عليك الاشتراك في القناة أولاً.
+"
+            "اضغط على الزر أدناه ثم أعد /start",
+            reply_markup=kb
+        )
+        return
+
     db.add_user(m.from_user.id,m.from_user.username,m.from_user.first_name)
     bot.send_message(m.chat.id,"📚 اختر:",reply_markup=main_kb(m.from_user.id))
 
@@ -166,9 +190,14 @@ def add_channel(m):
     states[m.from_user.id]="add_channel"
     bot.send_message(
         m.chat.id,
-        "🔗 أرسل القناة بهذا الشكل:\n\n"
-        "channel_id | channel_link | channel_name\n\n"
-        "مثال:\n-1001234567890 | https://t.me/example | قناة مثال"
+        "🔗 أرسل القناة بهذا الشكل:
+
+"
+        "channel_id | channel_link | channel_name
+
+"
+        "مثال:
+-1001234567890 | https://t.me/example | قناة مثال"
     )
 
 @bot.message_handler(func=lambda m:m.text=="🚫 حذف قناة" and m.from_user.id==ADMIN_ID)
@@ -186,6 +215,18 @@ def home_btn(m):
 # === Text Handler ===
 @bot.message_handler(func=lambda m:True)
 def text(m):
+    if not is_subscribed(m.from_user.id):
+        kb = types.InlineKeyboardMarkup()
+        kb.add(types.InlineKeyboardButton("📢 اشترك في القناة",url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"))
+        bot.send_message(
+            m.chat.id,
+            "⚠️ لاستخدام البوت عليك الاشتراك في القناة أولاً.
+"
+            "اضغط على الزر أدناه ثم أعد /start",
+            reply_markup=kb
+        )
+        return
+
     uid=m.from_user.id
     st=states.get(uid)
 
@@ -211,6 +252,7 @@ def text(m):
                     bot.send_message(m.chat.id,"📭 لا توجد ملفات")
                 for fid,fname in files:
                     bot.send_document(m.chat.id,fid,caption=fname)
+
 @bot.message_handler(func=lambda m: m.text == "👥 المستخدمين" and m.from_user.id == ADMIN_ID)
 def users_list(m):
     c = db.conn()
@@ -224,11 +266,15 @@ def users_list(m):
         bot.send_message(m.chat.id, "❌ لا يوجد مستخدمون")
         return
 
-    text = "👥 آخر المستخدمين:\n\n"
+    text = "👥 آخر المستخدمين:
+
+"
     for uid, user, name in users:
-        text += f"• {name or '—'} (@{user or '—'})\n"
+        text += f"• {name or '—'} (@{user or '—'})
+"
 
     bot.send_message(m.chat.id, text)
+
 @bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and m.from_user.id == ADMIN_ID)
 def stats(m):
     c = db.conn()
@@ -246,15 +292,31 @@ def stats(m):
 
     bot.send_message(
         m.chat.id,
-        f"📊 الإحصائيات:\n\n"
-        f"👥 المستخدمين: {u}\n"
-        f"📚 المواد: {s}\n"
-        f"📁 الملفات: {f}\n"
+        f"📊 الإحصائيات:
+
+"
+        f"👥 المستخدمين: {u}
+"
+        f"📚 المواد: {s}
+"
+        f"📁 الملفات: {f}
+"
         f"🔗 القنوات: {ch}"
     )
+
 # === Documents ===
 @bot.message_handler(content_types=['document'])
 def docs(m):
+    if not is_subscribed(m.from_user.id):
+        kb = types.InlineKeyboardMarkup()
+        kb.add(types.InlineKeyboardButton("📢 اشترك في القناة",url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"))
+        bot.send_message(
+            m.chat.id,
+            "⚠️ لرفع الملفات عليك الاشتراك في القناة أولاً.",
+            reply_markup=kb
+        )
+        return
+
     st=states.get(m.from_user.id,"")
     if st.startswith("file_"):
         sid=st.split("_")[1]
