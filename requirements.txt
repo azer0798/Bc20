@@ -9,7 +9,3 @@ content:
 Flask==3.0.0
 requests==2.31.0
 gunicorn==21.2.0
-file_path:
-/home/user/requirements.txt
-Response
-Created file /home/user/requirements.txt (47 characters)
