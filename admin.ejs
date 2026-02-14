@@ -2,35 +2,26 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>SafeNode - لوحة التحكم</title>
+    <title>SafeNode | لوحة التحكم</title>
     <style>
-        table { width: 80%; margin: 50px auto; border-collapse: collapse; background: white; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-        th { background: #333; color: white; }
-        .btn-approve { background: #28a745; color: white; border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer; }
+        body { font-family: sans-serif; background: #f4f7f6; text-align: center; padding: 50px; }
+        .card { background: white; padding: 30px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .link-box { background: #e9ecef; padding: 10px; margin-top: 20px; border: 1px dashed #333; }
     </style>
 </head>
 <body>
-    <h2 style="text-align: center;">إدارة طلبات التواصل</h2>
-    <table>
-        <tr>
-            <th>اسم المستخدم</th>
-            <th>الحالة</th>
-            <th>الإجراء</th>
-        </tr>
-        <% users.forEach(user => { %>
-        <tr>
-            <td><%= user.username %></td>
-            <td><%= user.isApproved ? 'تم التفعيل' : 'قيد الانتظار' %></td>
-            <td>
-                <% if(!user.isApproved) { %>
-                <form action="/approve/<%= user._id %>" method="POST">
-                    <button class="btn-approve">تفعيل التواصل</button>
-                </form>
-                <% } %>
-            </td>
-        </tr>
-        <% }) %>
-    </table>
+    <div class="card">
+        <h2>إدارة الوصول</h2>
+        <form action="/generate-link" method="POST">
+            <button type="submit">توليد رابط دعوة جديد</button>
+        </form>
+        <% if (inviteLink) { %>
+            <div class="link-box">
+                <p>انسخ الرابط وأرسله للطرف الآخر:</p>
+                <strong><%= inviteLink %></strong>
+            </div>
+        <% } %>
+    </div>
 </body>
 </html>
