@@ -4,24 +4,34 @@
     <meta charset="UTF-8">
     <title>SafeNode | لوحة التحكم</title>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; text-align: center; padding: 50px; }
-        .card { background: white; padding: 30px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
-        .link-box { background: #e9ecef; padding: 10px; margin-top: 20px; border: 1px dashed #333; }
+        body { font-family: sans-serif; background: #f0f2f5; text-align: center; padding: 40px; }
+        .box { background: white; padding: 20px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .link-display { background: #eee; padding: 10px; margin-top: 15px; border: 1px solid #ccc; word-break: break-all; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>إدارة الوصول</h2>
+    <div class="box">
+        <h2>لوحة تحكم الروابط</h2>
         <form action="/generate-link" method="POST">
-            <button type="submit">توليد رابط دعوة جديد</button>
+            <button type="submit">إنشاء رابط دعوة جديد</button>
         </form>
+        
         <% if (inviteLink) { %>
-            <div class="link-box">
-                <p>انسخ الرابط وأرسله للطرف الآخر:</p>
-                <strong><%= inviteLink %></strong>
+            <div class="link-display">
+                <p>تم إنشاء الرابط بنجاح:</p>
+                <code id="linkText"><%= inviteLink %></code><br>
+                <button onclick="copyLink()" style="background: #28a745;">نسخ الرابط</button>
             </div>
         <% } %>
     </div>
+
+    <script>
+        function copyLink() {
+            const link = document.getElementById('linkText').innerText;
+            navigator.clipboard.writeText(link);
+            alert("تم نسخ الرابط!");
+        }
+    </script>
 </body>
 </html>
