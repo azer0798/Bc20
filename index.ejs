@@ -4,49 +4,44 @@
     <meta charset="UTF-8">
     <title>SafeNode Chat</title>
     <style>
-        /* ستايل الدردشة */
-        #chat-container { height: 80vh; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background: white; }
-        .msg { margin-bottom: 10px; padding: 8px; border-radius: 5px; background: #e1ffc7; width: fit-content; }
-        img { max-width: 200px; display: block; margin-top: 5px; }
+        body { font-family: sans-serif; margin: 0; background: #e5ddd5; }
+        header { background: #075e54; color: white; padding: 15px; text-align: center; }
+        #chat { height: calc(100vh - 120px); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
+        .msg { background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; max-width: 70%; width: fit-content; }
+        .my-msg { align-self: flex-end; background: #dcf8c6; }
+        footer { position: fixed; bottom: 0; width: 100%; background: #f0f0f0; padding: 10px; display: flex; }
+        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; outline: none; }
+        button { background: #075e54; color: white; border: none; padding: 10px 20px; margin-right: 10px; border-radius: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div id="chat-container"></div>
-    <form id="msg-form">
-        <input id="text-input" placeholder="اكتب رسالة...">
-        <input type="file" id="image-input" accept="image/*">
-        <button type="submit">إرسال</button>
-    </form>
+    <header>SafeNode Chat - أهلاً <%= user.username %></header>
+    <div id="chat"></div>
+    <footer>
+        <input id="inp" placeholder="اكتب رسالتك..." autocomplete="off">
+        <button id="btn">إرسال</button>
+    </footer>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const form = document.getElementById('msg-form');
-        
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            const text = document.getElementById('text-input').value;
-            const file = document.getElementById('image-input').files[0];
-            let imageUrl = null;
+        const chat = document.getElementById('chat');
+        const inp = document.getElementById('inp');
+        const btn = document.getElementById('btn');
 
-            if (file) {
-                const formData = new FormData();
-                formData.append('image', file);
-                const res = await fetch('/upload', { method: 'POST', body: formData });
-                const data = await res.json();
-                imageUrl = data.url;
+        btn.onclick = () => {
+            if (inp.value) {
+                socket.emit('message', { user: '<%= user.username %>', text: inp.value });
+                inp.value = '';
             }
-
-            socket.emit('message', { user: '<%= user.username %>', text, imageUrl });
-            form.reset();
         };
 
         socket.on('message', (data) => {
             const div = document.createElement('div');
-            div.className = 'msg';
+            div.className = 'msg ' + (data.user === '<%= user.username %>' ? 'my-msg' : '');
             div.innerHTML = `<strong>${data.user}:</strong> ${data.text}`;
-            if (data.imageUrl) div.innerHTML += `<img src="${data.imageUrl}">`;
-            document.getElementById('chat-container').appendChild(div);
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
         });
     </script>
 </body>
